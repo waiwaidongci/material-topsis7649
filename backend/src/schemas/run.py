@@ -14,6 +14,7 @@ class RunSummary(RunInput):
     status:str
     summary:dict
     error:str
+    publication:dict=Field(default_factory=dict)
     created_at:datetime
     model_config=ConfigDict(from_attributes=True)
 class RunOut(RunSummary):

@@ -7,8 +7,8 @@ from src.services.run_service import get_run
 def list_notes(db):return db.scalars(select(TrialNote).order_by(TrialNote.id.desc())).all()
 def create_note(db,data):
     run=get_run(db,data.run_id)
-    if run.status!='completed':raise HTTPException(409,'只有完成的权衡研究可作为试样计划依据')
-    if data.sample_id not in {s['id'] for s in run.result['samples']}:raise HTTPException(422,'试样须属于本次候选快照')
+    if run.status!='completed' or not run.result:raise HTTPException(409,'只有通过双写核验发布的权衡研究可作为试样计划依据')
+    if data.sample_id not in {s['id'] for s in run.result.get('samples',[])}:raise HTTPException(422,'试样须属于本次候选快照')
     if db.scalar(select(TrialNote).where(TrialNote.name==data.name)):raise HTTPException(409,'试样计划名称已存在')
     item=TrialNote(**data.model_dump());db.add(item);db.commit();return item
 
@@ -23,7 +23,9 @@ def export_note(db,id):
     item=db.get(TrialNote,id)
     if not item:raise HTTPException(404,'试样计划不存在')
     if item.status!='approved':raise HTTPException(409,'仅已同意的试样计划可分发')
-    run=get_run(db,item.run_id);r=run.result;out=io.StringIO();w=csv.writer(out)
+    run=get_run(db,item.run_id)
+    if run.status!='completed' or not run.result:raise HTTPException(409,f'依据研究 # {run.id} 未通过双写核验或已被隔离，暂不能分发；恢复后可再导出')
+    r=run.result;out=io.StringIO();w=csv.writer(out)
     w.writerow(['note','sample_id','reviewer','reviewer_note','protocol','fingerprint','scope']);w.writerow([item.name,item.sample_id,item.reviewed_by,item.reviewer_note,item.protocol,r['fingerprint'],'偏好权重敏感性；不是统计置信、后验或采购建议'])
     w.writerow(['criterion','direction','unit','normalized_center_weight','alpha'])
     for c,weight,alpha in zip(r['criteria'],r['center_weights'],r['alpha']):w.writerow([c['code'],c['direction'],c['unit'],weight,alpha])

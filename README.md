@@ -68,7 +68,7 @@ docker compose exec -T backend python -m scripts.seed_demo
 | DATABASE_URL / REDIS_URL | Compose内部地址；本地可覆盖 |
 | OMP_NUM_THREADS / OPENBLAS_NUM_THREADS | 1，限制数值线程 |
 
-JWT有效8小时，PBKDF2-SHA256密码哈希。角色授权、写入/审批/导出审计、统一错误处理、登录每IP每分钟30次限流。单任务2–120候选、1–5指标、1000–2000情景，UI固定1000；最多3项排队/运行任务。数据库是任务状态的权威来源，即使Redis唤醒失败也会扫描执行；单worker中断后按原快照复算。
+JWT有效8小时，PBKDF2-SHA256密码哈希。角色授权、写入/审批/导出审计、统一错误处理、登录每IP每分钟30次限流。单任务2–120候选、1–5指标、1000–2000情景，UI固定1000；最多3项排队/运行任务。数据库是任务状态的权威来源，即使Redis唤醒失败也会扫描执行。任务状态机为 `queued→running→publishing→completed`，另有 `failed`（输入或计算错误）与 `quarantined`（结果副本均不可用）；worker中断后按状态断点恢复，见下节“结果双写与可恢复发布”。
 
 ## 算法与边界
 
@@ -92,17 +92,30 @@ C_i = D_i− / (D_i+ + D_i−)
 
 SHA256覆盖算法版本、完整冻结快照、原始中心权重、κ、情景数和seed。固定软件与输入可完整复算，结果同时存数据库和 `/artifacts/run-<id>.json`。指纹包含数据库ID，重建库或改变来源标识不保证相同指纹。运行列表只返回轻量摘要；详情按需读取完整情景，避免轮询反复搬运大JSON。
 
+## 结果双写与可恢复发布
+
+一次权衡的结果同时写入数据库 `result` 列与留档文件 `/artifacts/run-<id>.json`，断电可能只留下其中一份。结果按以下协议发布，只有核验一致后才供页面与计划导出读取：
+
+1. **断点检查点**：计算完成、留档落盘（临时文件+fsync+改名，记录sha256）、结果入库、双写核验、发布，每步提交到 `publication` 留痕列。在任一处中断，worker重启或巡检（`reconcile`）都从断点继续：未写入任何副本按冻结快照复算；只剩一份则从可用副本修复另一份；两份都在则直接核验发布——已核实的计算不重算。
+2. **核验口径**：每份副本校验结构完整性、内嵌快照与冻结输入一致、指纹可复算；两份再按规范化JSON的内容哈希比对。副本缺失或损坏时从另一份修复；两份均不可用（含数据库结果为空）时任务转为 `quarantined`，记录两侧状态与原因，绝不把空结果当完成。任一副本恢复后自动重新核验并发布。
+3. **执行者围栏**：接手任务时以纪元（epoch）条件更新原子认领，心跳30秒过期才可被接管；此后每次写入都要求当前 `claim_id` 匹配。并发接手或旧执行者晚到时，过期写入零行生效即放弃，仅当前有效执行者可发布。
+4. **读取门禁**：运行详情只在 `completed` 后返回 `result`；试样计划只能基于已发布结果提出；已批准计划的导出在依据任务被隔离时暂拒并说明，恢复后可再导出。既有已完成任务启动时自动补录核验，留档缺失则从数据库重写，既有权衡与批准计划保持可读。
+5. **页面可见**：配置与结果页展示发布五步进度、恢复事件留痕与隔离依据（两侧副本状态、原因、隔离时间）；已完成任务若有修复/隔离史，留痕折叠在队列条目内。
+
+发布期IO异常（如留档目录暂不可写）不把任务判死：停留在 `publishing` 并记录原因，巡检自动续跑。既有库升级时后端启动幂等补齐 `epoch/claim_id/heartbeat_at/publication` 四列（见 `migrations/002_recoverable_publication.sql`）。
+
 ## 工程结构与开发
 
 ```text
 backend/src/{models,schemas,services,controllers,routes}  五个独立业务链
-backend/src/services/{normalization,topsis,weight_sensitivity}.py
+backend/src/services/{normalization,topsis,weight_sensitivity,publication}.py
 backend/src/{config,constants,middlewares,utils}/
-backend/{scripts/seed_demo.py,migrations/001_initial.sql}
+backend/{scripts/seed_demo.py,migrations/001_initial.sql,migrations/002_recoverable_publication.sql}
+backend/tests/{test_recovery,test_api_flow,test_worker_loop}.py
 frontend/src/{api,stores,types,constants,components/common,hooks,pages,router,utils}/
 ```
 
-CandidateStudy、MaterialSample、Criterion、DecisionRun、TrialNote分别有独立model/schema/service/controller/route/API。studyStore管理研究及指标、sampleStore管理资料、researchStore管理任务/计划；六页为总览、输入口径、配置、结果、审阅、审计，登录另计。StudySelect复用于总览/输入/配置，PageHeading、ErrorNotice、StatusBadge等共享；RunSelect、WeightStrip、RankIntervals负责业务展示。
+CandidateStudy、MaterialSample、Criterion、DecisionRun、TrialNote分别有独立model/schema/service/controller/route/API。studyStore管理研究及指标、sampleStore管理资料、researchStore管理任务/计划；六页为总览、输入口径、配置、结果、审阅、审计，登录另计。StudySelect复用于总览/输入/配置，PageHeading、ErrorNotice、StatusBadge等共享；RunSelect、WeightStrip、RankIntervals、PublicationTrail负责业务展示。
 
 共享枚举Role、RunStatus、NoteStatus、Direction、MetricCode位于 `backend/src/constants/enums.py` 与 `frontend/src/constants/enums.ts`（类型联集在 `frontend/src/types/domain.ts`）；被auth依赖、criterion/note schema、services/worker状态、前端状态组件、口径与运行/结果/审阅页使用。
 

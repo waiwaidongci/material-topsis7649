@@ -7,6 +7,9 @@ export interface RankRow extends Sample{score:number;rank:number;distance_best:n
 export interface Draw{repeat:number;weights:number[];scores:number[];ranks:number[];first_share:number[];all_indistinguishable:boolean}
 export interface Result{samples:RankRow[];criteria:Criterion[];columns:{index:number;norm:number;constant:boolean;zero_norm:boolean;policy:string}[];center_weights:number[];alpha:number[];concentration:number;repeats:number;seed:number;ideal_best:number[];ideal_worst:number[];all_indistinguishable:boolean;draws:Draw[];zero_weight_scenarios:number;fingerprint:string;scope:string;snapshot:Snapshot}
 export interface Snapshot{study:Study;samples:Sample[];criteria:Criterion[]}
-export interface RunSummary{id:number;name:string;study_id:number;center_weights:Record<string,number>;concentration:number;repeats:number;seed:number;status:'queued'|'running'|'completed'|'failed';summary:{samples:number;criteria:number;fingerprint?:string;all_indistinguishable?:boolean};error:string;created_at:string}
+export interface RunSummary{id:number;name:string;study_id:number;center_weights:Record<string,number>;concentration:number;repeats:number;seed:number;status:'queued'|'running'|'publishing'|'completed'|'failed'|'quarantined';summary:{samples:number;criteria:number;fingerprint?:string;all_indistinguishable?:boolean};error:string;publication:Publication;created_at:string}
+export interface Publication{steps?:Record<string,string|number|null>;log?:PublicationLogEntry[];quarantine?:Quarantine|null}
+export interface PublicationLogEntry{at:string;event:string;detail:string}
+export interface Quarantine{at:string;reason:string;db_state:string;file_state:string;last_check_at?:string}
 export interface Run extends RunSummary{snapshot:Snapshot;result:Result}
 export interface Note{id:number;name:string;run_id:number;sample_id:number;protocol:string;status:'draft'|'approved'|'rejected';reviewer_note:string;reviewed_by:string;created_at:string}

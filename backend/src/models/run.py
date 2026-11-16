@@ -17,4 +17,8 @@ class DecisionRun(Base):
     summary:Mapped[dict]=mapped_column(JSON,default=dict)
     result:Mapped[dict]=mapped_column(JSON,default=dict)
     error:Mapped[str]=mapped_column(String(600),default='')
+    epoch:Mapped[int]=mapped_column(default=0)
+    claim_id:Mapped[str]=mapped_column(String(64),default='')
+    heartbeat_at:Mapped[datetime|None]=mapped_column(DateTime,default=None)
+    publication:Mapped[dict]=mapped_column(JSON,default=dict)
     created_at:Mapped[datetime]=mapped_column(DateTime,default=datetime.utcnow)

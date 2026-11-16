@@ -7,3 +7,24 @@
 
 /* A wide local table must not set the implicit minimum of a single-column grid. */
 @media(max-width:900px){.score-spread,.criterion-spread,.sensitivity-spread{grid-template-columns:minmax(0,1fr)}.score-spread>*,.criterion-spread>*,.sensitivity-spread>*{min-width:0}}
+
+/* recoverable dual-write publication */
+.status.publishing{color:var(--clay);border-color:oklch(72% .06 70)}
+.status.quarantined{color:var(--earth);border-color:oklch(72% .05 60)}
+.publication-trail{border-top:1px solid var(--line);margin-top:14px;padding-top:12px}
+.publication-trail .eyebrow{margin:0}
+.trail-steps{display:flex;gap:16px;list-style:none;padding:0;margin:12px 0;flex-wrap:wrap}
+.trail-steps li{display:flex;align-items:center;gap:7px;font-size:10px;color:var(--muted)}
+.trail-steps li i{width:8px;height:8px;border-radius:50%;border:1px solid var(--line);display:inline-block}
+.trail-steps li.done{color:var(--moss)}
+.trail-steps li.done i{background:var(--moss);border-color:var(--moss)}
+.trail-steps li small{font-size:8px}
+.quarantine-box{background:oklch(90% .04 46);border-left:3px solid var(--earth);padding:12px 16px;margin:10px 0;font-size:11px;overflow-wrap:anywhere}
+.quarantine-box b{color:var(--earth);font-weight:500}
+.quarantine-box p{margin:6px 0}
+.trail-log{list-style:none;padding:0;margin:8px 0;font-size:10px;color:var(--muted)}
+.trail-log li{display:flex;gap:10px;padding:5px 0;border-bottom:1px dashed var(--line);align-items:baseline}
+.trail-log li:last-child{border-bottom:0}
+.trail-log li b{color:var(--ink);font-weight:500;white-space:nowrap}
+.trail-log li span{flex:1;overflow-wrap:anywhere}
+.trail-log li small{font-size:8px;white-space:nowrap}

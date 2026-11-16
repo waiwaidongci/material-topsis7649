@@ -1,8 +1,8 @@
 """Dirichlet weights are hypothetical preference scenarios, never inference."""
 from collections import Counter
-import hashlib,json
 import numpy as np
 from src.services.normalization import normalize_matrix,normalize_weights
+from src.services.publication import fingerprint_inputs
 from src.services.topsis import score_normalized
 
 def analyze_decision(snapshot,center_weights,concentration,repeats,seed,heartbeat=None):
@@ -30,6 +30,5 @@ def analyze_decision(snapshot,center_weights,concentration,repeats,seed,heartbea
     for i,s in enumerate(samples):
         q=np.quantile(ranks[:,i],[.025,.5,.975]);freq=Counter(str(float(v)) for v in ranks[:,i])
         rows.append({**s,'score':float(baseline['scores'][i]),'rank':float(baseline['ranks'][i]),'distance_best':float(baseline['distance_best'][i]),'distance_worst':float(baseline['distance_worst'][i]),'rank_min':float(ranks[:,i].min()),'rank_max':float(ranks[:,i].max()),'rank_low':float(q[0]),'rank_median':float(q[1]),'rank_high':float(q[2]),'first_share':float(shares[:,i].mean()),'rank_frequency':dict(sorted(freq.items(),key=lambda x:float(x[0]))),'normalized':normalized[i].tolist(),'weighted':baseline['weighted'][i].tolist()})
-    canonical={'version':'vector-topsis-dirichlet-v1','snapshot':snapshot,'center_weights':center_weights,'concentration':concentration,'repeats':repeats,'seed':seed}
-    fingerprint=hashlib.sha256(json.dumps(canonical,sort_keys=True,separators=(',',':'),allow_nan=False).encode()).hexdigest()
+    fingerprint=fingerprint_inputs(snapshot,center_weights,concentration,repeats,seed)
     return {'samples':rows,'criteria':criteria,'columns':columns,'center_weights':center.tolist(),'alpha':alpha.tolist(),'concentration':concentration,'repeats':repeats,'seed':seed,'ideal_best':baseline['ideal_best'].tolist(),'ideal_worst':baseline['ideal_worst'].tolist(),'all_indistinguishable':baseline['all_indistinguishable'],'draws':draws,'zero_weight_scenarios':int(np.any(scenarios==0,axis=1).sum()),'fingerprint':fingerprint,'snapshot':snapshot,'rank_rule':'exact equal computed closeness scores receive average ranks; tied first split one share','scope':'hypothetical preference-weight sensitivity, not statistical confidence, posterior, or procurement recommendation'}
